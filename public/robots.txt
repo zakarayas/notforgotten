@@ -1,0 +1,6 @@
+# Allow all crawlers. Replace your-domain.com with your real domain after launch.
+User-agent: *
+Allow: /
+
+# Sitemap (replace with your live URL)
+Sitemap: https://your-domain.com/sitemap.xml
