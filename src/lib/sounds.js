@@ -1,20 +1,23 @@
 /**
  * UI sounds: organic pop sound by Roy S.
  * File: organic pop sound.mp3 (by Roy S)
- * Per-session cache-buster so the first tap gets the correct file (not a stale cached one).
+ * Uses decoded buffer for low-latency playback when ready; falls back to Audio element then synth.
  */
 
-const CACHE_BUST = '?v=5&s=' + Date.now();
+const CACHE_BUST = '?v=6&s=' + Date.now();
 const CLICK_URL = (import.meta.env.BASE_URL || '/') + 'assets/organic%20pop%20sound.mp3' + CACHE_BUST;
 
 let audioContext = null;
 let preloadedAudio = null;
+let clickBuffer = null;
+let bufferLoadStarted = false;
 let warmedUp = false;
 
 function warmUp() {
   if (warmedUp) return;
   warmedUp = true;
   ensurePreloaded();
+  startBufferLoad();
   const ctx = getContext();
   if (ctx.state === 'suspended') ctx.resume();
 }
@@ -43,12 +46,44 @@ function runWhenReady(ctx, fn) {
   fn();
 }
 
+function startBufferLoad() {
+  if (bufferLoadStarted || clickBuffer) return;
+  bufferLoadStarted = true;
+  const ctx = getContext();
+  fetch(CLICK_URL)
+    .then((r) => (r.ok ? r.arrayBuffer() : Promise.reject()))
+    .then((buf) => ctx.decodeAudioData(buf))
+    .then((decoded) => {
+      clickBuffer = decoded;
+    })
+    .catch(() => {});
+}
+
 function ensurePreloaded() {
   if (preloadedAudio !== null) return;
   preloadedAudio = new Audio(CLICK_URL);
   preloadedAudio.preload = 'auto';
   preloadedAudio.volume = 0.25;
   preloadedAudio.load();
+}
+
+function playFromBuffer() {
+  if (!clickBuffer) return false;
+  const ctx = getContext();
+  try {
+    runWhenReady(ctx, () => {
+      const src = ctx.createBufferSource();
+      const gain = ctx.createGain();
+      gain.gain.value = 0.25;
+      src.buffer = clickBuffer;
+      src.connect(gain);
+      gain.connect(ctx.destination);
+      src.start(0);
+    });
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
 
 function playFromFile() {
@@ -106,12 +141,14 @@ function playTapSynth() {
 
 export function playTap() {
   warmUp();
+  if (playFromBuffer()) return;
   if (playFromFile()) return;
   playTapSynth();
 }
 
 export function playMenuToggle() {
   warmUp();
+  if (playFromBuffer()) return;
   if (playFromFile()) return;
   playTapSynth();
 }
