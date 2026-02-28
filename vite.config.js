@@ -1,5 +1,5 @@
 export default {
-  base: '/notforgotten/',
+  base: '/NotForgotten/',
   build: {
     outDir: 'dist',
     assetsInlineLimit: 4096,
